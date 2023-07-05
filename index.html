@@ -104,6 +104,16 @@
             return wrap
         },
     })
+    Shape.HTML.register({
+        shape: 'html-point',
+        width: 200,
+        height: 100,
+        html: (cell) => {
+            const data = cell.getData()
+            const wrap = document.createElement('div')
+            return wrap
+        },
+    })
     // 生成画布
     const boxDom = document.getElementById('box')
     const graph = new Graph({
@@ -177,217 +187,103 @@
         })
     }
 
-    // 定值
+    function getCouple(benchmarkNode) {
+        const benchmark = benchmarkNode.data
+        const couples = DATA.filter(item => benchmark.pids.includes(item.id + ''))
+        if (couples.length > 0) {
+            if (benchmark.gender === 'male') { // 男性
+                couples.forEach((couple, index) => {
+                    // 妻子一定在右边
+                    const coordinate = {
+                        x: benchmarkNode.position().x + (index % 2 === 0 ? (nodeWidth + gapX) : -(nodeWidth + gapX)),
+                        y: benchmarkNode.position().y
+                    }
+                    const coupleNode = generateNode(coordinate.x, coordinate.y, couple)
+                    link(benchmarkNode, coupleNode)
+                    getElder(coupleNode)
+                })
+            } else { // 女性
+                couples.forEach((couple, index) => {
+                    // 丈夫一定在左边
+                    const coordinate = {
+                        x: benchmarkNode.position().x + (index % 2 === 0 ? (nodeWidth + gapX) : -(nodeWidth + gapX)),
+                        y: benchmarkNode.position().y
+                    }
+                    const coupleNode = generateNode(coordinate.x, coordinate.y, couple)
+                    link(benchmarkNode, coupleNode)
+                    getElder(coupleNode)
+                })
+            }
+        }
+    }
+
+    function getElder(benchmarkNode) {
+        const benchmark = benchmarkNode.data
+        function __get(benchmarkNode, nodeData) {
+            const benchmark = benchmarkNode.data
+            const coordinate = {
+                x: benchmarkNode.position().x,
+                y: benchmarkNode.position().y - (nodeHeight + gapY)
+            }
+            if(benchmark.gender === 'male' && nodeData.pids.length > 0) {
+                coordinate.x = benchmarkNode.position().x - (nodeWidth + gapX)
+            }
+            const elderNode = generateNode(coordinate.x, coordinate.y, nodeData)
+            link(benchmarkNode, elderNode, [
+                {
+                    x: benchmarkNode.position().x + nodeWidth + gapX /2,
+                    y: benchmarkNode.position().y + nodeHeight / 2
+                },
+                {
+                    x: benchmarkNode.position().x + nodeWidth + gapX /2,
+                    y: benchmarkNode.position().y - gapY / 2
+                },
+                {
+                    x: elderNode.position().x + nodeWidth + gapX / 2,
+                    y: elderNode.position().y + nodeHeight + gapY / 2
+                },
+                {
+                    x: elderNode.position().x + nodeWidth + gapX / 2,
+                    y: elderNode.position().y + gapY / 2
+                }
+            ])
+            getCouple(elderNode)
+            getElder(elderNode)
+        }
+        const elders = DATA.filter(item => item.id === benchmark.fid || item.id === benchmark.mid)
+        const father = elders.find(item => item.gender === 'male')
+        const mother = elders.find(item => item.gender === 'female')
+        if (father) {
+            __get(benchmarkNode, father)
+        } else {
+            if (mother) {
+                __get(benchmarkNode, mother)
+            }
+        }
+    }
+
+
     const gapX = 80
     const gapY = 100
     const nodeWidth = 200
     const nodeHeight = 100
-
+    // 定值
     const mine = DATA.find(item => item['姓名'] === '本人')
     const mineNode = generateNode(0, 0, mine)
 
-    /**
-     * 获取妻子节点
-     * @param startNode
-     * @param wife
-     * @param direction
-     * @returns {*}
-     */
-    function getWife(startNode, wife, direction = 'R') {
-        const x = direction === 'R' ? startNode.position().x + nodeWidth + gapX : startNode.position().x - (nodeWidth + gapX)
-        const wifeNode = generateNode(x, startNode.position().y, wife)
-        link(startNode, wifeNode)
-        init(wifeNode)
-        return wifeNode
+    function init(benchmarkNode, direction = 'L') {
+        const benchmark = benchmarkNode.data
+        let elders = null // 长辈
+        let peers = null // 同辈
+        let offsprings = null // 子辈
+        let couples = null // 夫妻
+
+        // 获取妻子(目前只考虑两位妻子的情况)
+        getCouple(mineNode)
+        // 获取父母 (以父亲为基准)
+        getElder(benchmarkNode)
+
     }
-
-    /**
-     * 获取长辈节点
-     * @param startNode
-     * @param father
-     * @param direction
-     * @returns {*}
-     */
-    function getFather(startNode, father, direction = 'L') {
-        const x = direction === 'L' ? startNode.position().x - (nodeWidth + gapX) : startNode.position().x
-        const fatherNode = generateNode(x, startNode.position().y - (nodeHeight + gapY), father)
-        link(startNode, fatherNode, [
-            {
-                x: startNode.position().x + nodeWidth / 2,
-                y: startNode.position().y - gapY / 2
-            },
-            {
-                x: fatherNode.position().x + nodeWidth + gapX / 2,
-                y: fatherNode.position().y + nodeHeight + gapY / 2
-            },
-            {
-                x: fatherNode.position().x + nodeWidth + gapX / 2,
-                y: fatherNode.position().y + nodeHeight / 2
-            }
-        ])
-        init(fatherNode)
-        return fatherNode
-    }
-
-    /**
-     * 获取同辈节点
-     * @param startNode
-     * @param fatherNode
-     * @param brother
-     * @param direction
-     */
-    function getBrother(startNode, fatherNode, brother, direction = 'R') {
-        brother.reduce((prev, item) => {
-            let initalNode = null, brotherNode = null, x
-            /**
-             * 遍历同辈
-             * initalNode为上一个节点
-             * brotherNode为当前节点
-             * direction => 同辈排列方向
-             */
-            initalNode = prev ? prev : startNode
-            let wifeNum = initalNode.data.pids.length // 上一个节点的妻子数量（目前只考虑两位妻子）
-            const itemWifeNum = item.pids.length // 当前节点的妻子个数
-            if (wifeNum === 1) {
-                if (direction === 'R') {
-                    if (initalNode.data.id === startNode.data.id && itemWifeNum < 2) {
-                        x = initalNode.position().x + (nodeWidth + gapX)
-                    } else {
-                        x = initalNode.position().x + (nodeWidth + gapX) * 2
-                    }
-                } else {
-                    if (initalNode.data.id === startNode.data.id && itemWifeNum < 2) {
-                        x = initalNode.position().x - (nodeWidth + gapX)
-                    } else {
-                        x = initalNode.position().x - (nodeWidth + gapX) * 2
-                    }
-                }
-                brotherNode = generateNode(x, initalNode.position().y, item)
-            } else if (wifeNum === 2) {
-                if (direction === 'R') {
-                    x = initalNode.position().x + (nodeWidth + gapX) * 2
-                } else {
-                    x = initalNode.position().x - (nodeWidth + gapX) * 2
-                }
-                brotherNode = generateNode(x, initalNode.position().y, item)
-            } else {
-                x = direction === 'R' ? initalNode.position().x + nodeWidth + gapX : initalNode.position().x - (nodeWidth + gapX)
-                brotherNode = generateNode(x, initalNode.position().y, item)
-            }
-
-            if (fatherNode) {
-                link(brotherNode, fatherNode, [
-                    {
-                        x: brotherNode.position().x + nodeWidth / 2,
-                        y: brotherNode.position().y - gapY / 2
-                    },
-                    {
-                        x: fatherNode.position().x + nodeWidth + gapX / 2,
-                        y: fatherNode.position().y + nodeHeight + gapY / 2
-                    },
-                    {
-                        x: fatherNode.position().x + nodeWidth + gapX / 2,
-                        y: fatherNode.position().y + nodeHeight / 2
-                    }
-                ])
-            }
-
-            const wives = DATA.filter(r => item.pids.includes(r.id + ''))
-            if (wives.length > 1) {
-                wives.reduce((prev, item) => {
-                    if (!prev) {
-                        return getWife(brotherNode, item, direction)
-                    }
-                    return getWife(brotherNode, item, direction)
-                }, null)
-            }
-            if (wives.length === 1) {
-                const x = direction === 'L' ? brotherNode.position().x - (nodeWidth + gapX) : brotherNode.position().x + (nodeWidth + gapX)
-                const wifeNode = generateNode(x, brotherNode.position().y, wives[0])
-                link(brotherNode, wifeNode)
-            }
-            return brotherNode
-        }, null)
-    }
-
-    /**
-     * 获取子辈节点
-     * @param startNode
-     * @param sons
-     */
-    function getSon(startNode, sons) {
-        sons.reduce((prev, item) => {
-            let sonNode = null
-            let initialNode = {x: 0, y: 0}
-            if (!prev) {
-                initialNode.x = startNode.position().x
-                initialNode.y = startNode.position().y + nodeHeight + gapY
-                sonNode = generateNode(startNode.position().x, startNode.position().y + nodeHeight + gapY, item)
-            } else {
-                if (item.pids.length > 0) {
-                    sonNode = generateNode(prev.position().x - (nodeWidth + gapX) * 2, prev.position().y, item)
-                } else {
-                    sonNode = generateNode(prev.position().x - (nodeWidth + gapX), prev.position().y, item)
-                }
-            }
-            if (sonNode.data.pids.length > 0) {
-                const wife = DATA.find(item => sonNode.data.pids.includes(item.id + ''))
-                getWife(sonNode, wife)
-            }
-            link(startNode, sonNode)
-            // 儿子的子代
-            const offsprings = DATA.filter(item => item.fid === sonNode.data.id || item.mid === sonNode.data.id)
-            if (offsprings.length > 0) {
-                getSon(startNode, offsprings)
-            }
-            return sonNode
-        }, null)
-    }
-
-    function init(startNode, direction = 'L') {
-        let fatherNode = null, wifeNode = null, brotherNode = null, sonNode = null
-        const data = startNode.data
-        // 妻子
-        let wives
-        if (startNode.data.gender === 'male') {
-            wives = DATA.filter(item => {
-                return startNode.data.pids.includes(item.id + '')
-            })
-            if (wives.length > 0) {
-                wives.forEach(wife => {
-                    wifeNode = getWife(startNode, wife)
-                })
-            }
-        }
-        // 父亲
-        const father = DATA.find(item => item.id === data.fid)
-        //  亲生兄弟姐妹
-        const brother = DATA.filter(item => {
-            return item.id !== data.id && item.fid && item.mid && item.fid === data.fid && item.mid === data.mid
-        })
-
-        if (father) {
-            if (startNode.data.gender === 'female') {
-                fatherNode = getFather(startNode, father, direction === 'L' ? 'R' : 'L')
-            } else {
-                fatherNode = getFather(startNode, father, direction)
-            }
-        }
-        if (brother.length > 0) {
-            if (startNode.data.gender === 'female') {
-                getBrother(startNode, fatherNode, brother, 'R')
-            } else {
-                getBrother(startNode, fatherNode, brother, 'L')
-            }
-        }
-
-        // 我的儿子
-        const sons = DATA.filter(item => item.fid === mineNode.data.id || item.mid === mineNode.data.id)
-        if (startNode.data.id === mineNode.data.id) {
-            getSon(startNode, sons)
-        }
-    }
-
 
     init(mineNode)
     graph.zoomToFit({
