@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <script src="x6.min.js"></script>
+    <title>家系图</title>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+        }
+
+        #box {
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .wrap {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            background-color: #fff;
+            /*padding: 20px;*/
+            font-size: 14px;
+        }
+
+        .node-header {
+            position: absolute;
+            top: 0;
+            color: #fff;
+            text-align: center;
+            width: 100%;
+            height: 20px;
+            font-size: 12px;
+        }
+
+        .male {
+            border: 2px solid #9254de;
+        }
+
+        .female {
+            border: 2px solid #BC53AB;
+        }
+    </style>
+</head>
+<body>
+<div id="box">
+    <div style="width: 100%; height: 100%;">
+        <div id="container"></div>
+    </div>
+</div>
+
+<script type="module">
+    import DATA from './genogram.js'
+
+    const {Graph, Shape} = window.X6
+    // 注册边
+    Graph.registerEdge('x6-edge', {
+        zIndex: -1,
+        attrs: {
+            line: {
+                fill: 'none',
+                strokeLinejoin: 'round',
+                strokeWidth: 1,
+                stroke: '#5F95FF',
+                sourceMarker: null,
+                targetMarker: null,
+            },
+        },
+    }, true)
+    // 注册节点
+    Shape.HTML.register({
+        shape: 'html-node',
+        width: 200,
+        height: 100,
+        html: (cell) => {
+            const data = cell.getData()
+            const wrap = document.createElement('div')
+            wrap.className = 'wrap'
+            wrap.innerHTML = `
+            <div>${data['姓名']}</div>
+            <div>${data['详情']}</div>
+            `
+
+            const header = document.createElement('div')
+            header.className = 'node-header'
+            header.innerText = data['关系']
+            wrap.appendChild(header)
+            if (data.gender === 'male') {
+                wrap.classList.add('male')
+                header.style.backgroundColor = '#9254de'
+            } else {
+                wrap.classList.add('female')
+                header.style.backgroundColor = '#BC53AB'
+            }
+            return wrap
+        },
+    })
+    // 生成画布
+    const boxDom = document.getElementById('box')
+    const graph = new Graph({
+        container: document.getElementById('container'),
+        width: boxDom.clientWidth,
+        height: boxDom.clientHeight,
+        background: {
+            color: "#F2F7FA",
+        },
+        panning: true,
+        mousewheel: true,
+        grid: true,
+        autoResize: true,
+    })
+
+    /**
+     * 生成节点
+     * @param x
+     * @param y
+     * @param people
+     * @param config
+     * @returns {*}
+     */
+    function generateNode(x, y, people, config = {}) {
+        return graph.addNode({
+            x,
+            y,
+            // shape: 'x6-node',
+            shape: 'html-node',
+            attrs: {
+                name: {
+                    text: `${people['姓名'] || ''}`
+                },
+                ...config.attrs
+            },
+            data: people
+        })
+    }
+
+    /**
+     * 连线节点
+     * @param source
+     * @param target
+     * @param vertices
+     * @param config
+     * @returns {*}
+     */
+    function link(source, target, vertices, config) {
+        return graph.addEdge({
+            shape: 'x6-edge',
+            // connector: {
+            //     name: 'rounded',
+            //     args: {radius: 10},
+            // },
+            source: {
+                cell: source,
+            },
+            target: {
+                cell: target,
+            },
+
+            vertices,
+            ...(config ? config : {
+                attrs: {
+                    line: {
+                        targetMarker: 'classic',
+                    },
+                }
+            })
+
+        })
+    }
+
+    // 定值
+    const gapX = 80
+    const gapY = 100
+    const nodeWidth = 200
+    const nodeHeight = 100
+
+    const mine = DATA.find(item => item['姓名'] === '本人')
+    const mineNode = generateNode(0, 0, mine)
+
+    /**
+     * 获取妻子节点
+     * @param startNode
+     * @param wife
+     * @param direction
+     * @returns {*}
+     */
+    function getWife(startNode, wife, direction = 'R') {
+        const x = direction === 'R' ? startNode.position().x + nodeWidth + gapX : startNode.position().x - (nodeWidth + gapX)
+        const wifeNode = generateNode(x, startNode.position().y, wife)
+        link(startNode, wifeNode)
+        init(wifeNode)
+        return wifeNode
+    }
+
+    /**
+     * 获取长辈节点
+     * @param startNode
+     * @param father
+     * @param direction
+     * @returns {*}
+     */
+    function getFather(startNode, father, direction = 'L') {
+        const x = direction === 'L' ? startNode.position().x - (nodeWidth + gapX) : startNode.position().x
+        const fatherNode = generateNode(x, startNode.position().y - (nodeHeight + gapY), father)
+        link(startNode, fatherNode, [
+            {
+                x: startNode.position().x + nodeWidth / 2,
+                y: startNode.position().y - gapY / 2
+            },
+            {
+                x: fatherNode.position().x + nodeWidth + gapX / 2,
+                y: fatherNode.position().y + nodeHeight + gapY / 2
+            },
+            {
+                x: fatherNode.position().x + nodeWidth + gapX / 2,
+                y: fatherNode.position().y + nodeHeight / 2
+            }
+        ])
+        init(fatherNode)
+        return fatherNode
+    }
+
+    /**
+     * 获取同辈节点
+     * @param startNode
+     * @param fatherNode
+     * @param brother
+     * @param direction
+     */
+    function getBrother(startNode, fatherNode, brother, direction = 'R') {
+        brother.reduce((prev, item) => {
+            let initalNode = null, brotherNode = null, x
+            /**
+             * 遍历同辈
+             * initalNode为上一个节点
+             * brotherNode为当前节点
+             * direction => 同辈排列方向
+             */
+            initalNode = prev ? prev : startNode
+            let wifeNum = initalNode.data.pids.length // 上一个节点的妻子数量（目前只考虑两位妻子）
+            const itemWifeNum = item.pids.length // 当前节点的妻子个数
+            if (wifeNum === 1) {
+                if (direction === 'R') {
+                    if (initalNode.data.id === startNode.data.id && itemWifeNum < 2) {
+                        x = initalNode.position().x + (nodeWidth + gapX)
+                    } else {
+                        x = initalNode.position().x + (nodeWidth + gapX) * 2
+                    }
+                } else {
+                    if (initalNode.data.id === startNode.data.id && itemWifeNum < 2) {
+                        x = initalNode.position().x - (nodeWidth + gapX)
+                    } else {
+                        x = initalNode.position().x - (nodeWidth + gapX) * 2
+                    }
+                }
+                brotherNode = generateNode(x, initalNode.position().y, item)
+            } else if (wifeNum === 2) {
+                if (direction === 'R') {
+                    x = initalNode.position().x + (nodeWidth + gapX) * 2
+                } else {
+                    x = initalNode.position().x - (nodeWidth + gapX) * 2
+                }
+                brotherNode = generateNode(x, initalNode.position().y, item)
+            } else {
+                x = direction === 'R' ? initalNode.position().x + nodeWidth + gapX : initalNode.position().x - (nodeWidth + gapX)
+                brotherNode = generateNode(x, initalNode.position().y, item)
+            }
+
+            if (fatherNode) {
+                link(brotherNode, fatherNode, [
+                    {
+                        x: brotherNode.position().x + nodeWidth / 2,
+                        y: brotherNode.position().y - gapY / 2
+                    },
+                    {
+                        x: fatherNode.position().x + nodeWidth + gapX / 2,
+                        y: fatherNode.position().y + nodeHeight + gapY / 2
+                    },
+                    {
+                        x: fatherNode.position().x + nodeWidth + gapX / 2,
+                        y: fatherNode.position().y + nodeHeight / 2
+                    }
+                ])
+            }
+
+            const wives = DATA.filter(r => item.pids.includes(r.id + ''))
+            if (wives.length > 1) {
+                wives.reduce((prev, item) => {
+                    if (!prev) {
+                        return getWife(brotherNode, item, direction)
+                    }
+                    return getWife(brotherNode, item, direction)
+                }, null)
+            }
+            if (wives.length === 1) {
+                const x = direction === 'L' ? brotherNode.position().x - (nodeWidth + gapX) : brotherNode.position().x + (nodeWidth + gapX)
+                const wifeNode = generateNode(x, brotherNode.position().y, wives[0])
+                link(brotherNode, wifeNode)
+            }
+            return brotherNode
+        }, null)
+    }
+
+    /**
+     * 获取子辈节点
+     * @param startNode
+     * @param sons
+     */
+    function getSon(startNode, sons) {
+        sons.reduce((prev, item) => {
+            let sonNode = null
+            let initialNode = {x: 0, y: 0}
+            if (!prev) {
+                initialNode.x = startNode.position().x
+                initialNode.y = startNode.position().y + nodeHeight + gapY
+                sonNode = generateNode(startNode.position().x, startNode.position().y + nodeHeight + gapY, item)
+            } else {
+                if (item.pids.length > 0) {
+                    sonNode = generateNode(prev.position().x - (nodeWidth + gapX) * 2, prev.position().y, item)
+                } else {
+                    sonNode = generateNode(prev.position().x - (nodeWidth + gapX), prev.position().y, item)
+                }
+            }
+            if (sonNode.data.pids.length > 0) {
+                const wife = DATA.find(item => sonNode.data.pids.includes(item.id + ''))
+                getWife(sonNode, wife)
+            }
+            link(startNode, sonNode)
+            // 儿子的子代
+            const offsprings = DATA.filter(item => item.fid === sonNode.data.id || item.mid === sonNode.data.id)
+            if (offsprings.length > 0) {
+                getSon(startNode, offsprings)
+            }
+            return sonNode
+        }, null)
+    }
+
+    function init(startNode, direction = 'L') {
+        let fatherNode = null, wifeNode = null, brotherNode = null, sonNode = null
+        const data = startNode.data
+        // 妻子
+        let wives
+        if (startNode.data.gender === 'male') {
+            wives = DATA.filter(item => {
+                return startNode.data.pids.includes(item.id + '')
+            })
+            if (wives.length > 0) {
+                wives.forEach(wife => {
+                    wifeNode = getWife(startNode, wife)
+                })
+            }
+        }
+        // 父亲
+        const father = DATA.find(item => item.id === data.fid)
+        //  亲生兄弟姐妹
+        const brother = DATA.filter(item => {
+            return item.id !== data.id && item.fid && item.mid && item.fid === data.fid && item.mid === data.mid
+        })
+
+        if (father) {
+            if (startNode.data.gender === 'female') {
+                fatherNode = getFather(startNode, father, direction === 'L' ? 'R' : 'L')
+            } else {
+                fatherNode = getFather(startNode, father, direction)
+            }
+        }
+        if (brother.length > 0) {
+            if (startNode.data.gender === 'female') {
+                getBrother(startNode, fatherNode, brother, 'R')
+            } else {
+                getBrother(startNode, fatherNode, brother, 'L')
+            }
+        }
+
+        // 我的儿子
+        const sons = DATA.filter(item => item.fid === mineNode.data.id || item.mid === mineNode.data.id)
+        if (startNode.data.id === mineNode.data.id) {
+            getSon(startNode, sons)
+        }
+    }
+
+
+    init(mineNode)
+    graph.zoomToFit({
+        maxScale: 1,
+        padding: 30
+    })
+    graph.centerContent(); // 将画布中元素居中展示
+</script>
+</body>
+</html>
