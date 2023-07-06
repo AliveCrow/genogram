@@ -222,33 +222,32 @@
      * @returns {[{x: *, y},{x: *, y: number}]}
      */
     function getLink(baseNode, isSinger = false, direction = 'T') {
-        if(!isSinger) {
-            if(direction === 'T') {
+        if (!isSinger) {
+            if (direction === 'T') {
                 return [
                     {
-                        x: baseNode.position().x + nodeWidth + gapX /2,
+                        x: baseNode.position().x + nodeWidth + gapX / 2,
                         y: baseNode.position().y - gapY / 2,
                     },
                     {
-                        x: baseNode.position().x + nodeWidth + gapX /2,
+                        x: baseNode.position().x + nodeWidth + gapX / 2,
                         y: baseNode.position().y + nodeHeight / 2,
                     }
                 ]
-            }
-            else {
+            } else {
                 return [
                     {
-                        x: baseNode.position().x + nodeWidth + gapX /2,
+                        x: baseNode.position().x + nodeWidth + gapX / 2,
                         y: baseNode.position().y + nodeHeight + gapY / 2,
                     },
                     {
-                        x: baseNode.position().x + nodeWidth + gapX /2,
+                        x: baseNode.position().x + nodeWidth + gapX / 2,
                         y: baseNode.position().y + nodeHeight / 2,
                     }
                 ]
             }
         } else {
-            if(direction === 'T') {
+            if (direction === 'T') {
                 return [
                     {
                         x: baseNode.position().x + nodeWidth / 2,
@@ -259,8 +258,7 @@
                         y: baseNode.position().y - gapY / 2,
                     }
                 ]
-            }
-            else {
+            } else {
                 return [
                     {
                         x: baseNode.position().x + nodeWidth / 2,
@@ -273,6 +271,23 @@
                 ]
             }
         }
+    }
+
+    /**
+     * 获取同辈节点之间的间距
+     * @param data
+     * @param max
+     * @returns {number|number}
+     */
+    function getMaxLength(data, max = 0) {
+        const sons = DATA.filter(item => item.fid === data.id || item.mid === data.id)
+        let maxNum = max > sons.length ? max : sons.length
+        if (sons.length > 0) {
+            sons.forEach(son => {
+                maxNum = max > getMaxLength(son, maxNum) ? max : getMaxLength(son, maxNum)
+            })
+        }
+        return maxNum
     }
 
     /**
@@ -293,8 +308,8 @@
             case 1:
                 const coupleNode = generateNode(coordinate.x + nodeGapX, coordinate.y, couples[0])
                 link(baseNode, coupleNode)
-                // getElder(coupleNode)
-                getPeer(coupleNode)
+                getElder(coupleNode)
+                // getPeer(coupleNode)
                 break
             case 2:
                 couples.forEach((item, index) => {
@@ -310,7 +325,6 @@
         }
     }
 
-
     /**
      * 父母节点
      * @param baseNode
@@ -323,7 +337,7 @@
         const baseData = baseNode.data
         // 直系长辈
         const elder = DATA.filter(item => item.id === baseData.fid || item.id === baseData.mid)
-        if(baseData.gender === 'male') {
+        if (baseData.gender === 'male') {
             if (elder.length > 0) {
                 const hasFather = elder.some(item => item.gender === 'male')
                 const hasMother = elder.some(item => item.gender === 'female')
@@ -333,13 +347,14 @@
                 if (hasFather) {
                     const father = elder.find(item => item.gender === 'male')
                     // fatherNode
-                    coordinate.x = baseNode.position().x - nodeGapX * 2
+                    coordinate.x = baseNode.position().x + (hasMother ? -nodeGapX : 0)
                     coordinate.y = baseNode.position().y - nodeGapY
                     const fatherNode = generateNode(coordinate.x, coordinate.y, father)
                     link(baseNode, fatherNode, [
                         ...getLink(baseNode, true),
-                        ...getLink(fatherNode, false, 'B'),
+                        ...getLink(fatherNode, !hasMother, 'B'),
                     ])
+                    getElder(fatherNode)
                     if (hasMother) {
                         getCouples(fatherNode)
                     }
@@ -347,13 +362,14 @@
                     if (hasMother) {
                         // motherNode
                         const mother = elder.find(item => item.gender === 'female')
-                        coordinate.x = baseNode.position().x - nodeGapX
+                        coordinate.x = baseNode.position().x
                         coordinate.y = baseNode.position().y - nodeGapY
                         const motherNode = generateNode(coordinate.x, coordinate.y, mother)
                         link(baseNode, motherNode, [
                             ...getLink(baseNode, true),
                             ...getLink(motherNode, true, 'B'),
                         ])
+                        getElder(motherNode)
                     }
                 }
             }
@@ -367,13 +383,14 @@
                 if (hasFather) {
                     const father = elder.find(item => item.gender === 'male')
                     // fatherNode
-                    coordinate.x = baseNode.position().x + nodeGapX
+                    coordinate.x = baseNode.position().x
                     coordinate.y = baseNode.position().y - nodeGapY
                     const fatherNode = generateNode(coordinate.x, coordinate.y, father)
                     link(baseNode, fatherNode, [
                         ...getLink(baseNode, true),
                         ...getLink(fatherNode, false, 'B'),
                     ])
+                    getElder(fatherNode)
                     if (hasMother) {
                         getCouples(fatherNode)
                     }
@@ -388,6 +405,7 @@
                             ...getLink(baseNode, true),
                             ...getLink(motherNode, true, 'B'),
                         ])
+                        getElder(motherNode)
                     }
                 }
             }
@@ -404,22 +422,36 @@
             y: baseNode.position().y
         } // 坐标
         const baseData = baseNode.data
-        let peers = DATA.filter(item =>  baseData.fid && baseData.mid && item.id !== baseData.id && (item.fid === baseData.fid || item.mid === baseData.mid))
-        if(baseData.gender === 'male') {
+        let node = null
+        // 同辈数组
+        let peers = DATA.filter(item => baseData.fid && baseData.mid && item.id !== baseData.id && (item.fid === baseData.fid || item.mid === baseData.mid))
+        if (baseData.gender === 'male') {
             peers.reduce((prev, cur) => {
                 const prevNode = prev ? prev : baseNode
-                let maxLength = 0
-                DATA.reduce((prev2, cur2) => {
-                    if(cur2.fid === cur.id || cur2.mid === cur.id) {
-                        prev2 = prev2 + 1
-                    }
-                    maxLength = maxLength > prev2 ? maxLength : prev2
-                    return prev2
-                }, 0)
-                console.log(maxLength)
                 coordinate.x = prevNode.position().x - nodeGapX
                 coordinate.y = prevNode.position().y
-                const node = generateNode(coordinate.x, coordinate.y, cur)
+                const maxLength = getMaxLength(cur)
+                console.log(cur,cur.pids, maxLength)
+                if(cur?.pids && cur.pids.length > 0) {
+                    coordinate.x = coordinate.x - nodeGapX * (maxLength + 1)
+                    node = generateNode(coordinate.x, coordinate.y, cur)
+                    getCouples(node)
+                    const sons = DATA.filter(item => item.fid === node.data.id || item.mid === node.data.id)
+                    {
+                        sons.reduce((prev, cur) => {
+                            const prevNode = prev? prev : node
+                            coordinate.x = prevNode.position().x + nodeGapX
+                            coordinate.y = prevNode.position().y + nodeGapY
+                            const node1 = generateNode(coordinate.x, coordinate.y, cur)
+                            link(node1, node, [
+                                ...getLink(node1, true),
+                                ...getLink(node, false, 'B'),
+                            ])
+                            getCouples(node1)
+                            return node1
+                        }, null)
+                    }
+                }
                 return node
             }, null)
         }
@@ -430,7 +462,7 @@
         // 获取对象(目前只考虑两位妻子的情况)
         getCouples(benchmarkNode)
         // 获取父母 (以父亲为基准)
-        // getElder(benchmarkNode)
+        getElder(benchmarkNode)
         // 获取子辈
         // getOffSpring(benchmarkNode)
         // 获取同辈
