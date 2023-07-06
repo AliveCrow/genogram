@@ -183,7 +183,7 @@
     const nodeWidth = 200
     const nodeHeight = 100
 
-    const mine = DATA.find(item => item['姓名'] === '本人')
+    const mine = DATA.find(item => item['关系'] === '本人')
     const mineNode = generateNode(0, 0, mine)
 
     /**
@@ -251,8 +251,8 @@
              * direction => 同辈排列方向
              */
             initalNode = prev ? prev : startNode
-            let wifeNum = initalNode.data.pids.length // 上一个节点的妻子数量（目前只考虑两位妻子）
-            const itemWifeNum = item.pids.length // 当前节点的妻子个数
+            let wifeNum = initalNode.data.pids?.length || 0 // 上一个节点的妻子数量（目前只考虑两位妻子）
+            const itemWifeNum = item.pids?.length || 0 // 当前节点的妻子个数
             if (wifeNum === 1) {
                 if (direction === 'R') {
                     if (initalNode.data.id === startNode.data.id && itemWifeNum < 2) {
@@ -297,7 +297,7 @@
                 ])
             }
 
-            const wives = DATA.filter(r => item.pids.includes(r.id + ''))
+            const wives = DATA.filter(r => (item?.pids || []).includes(r.id + ''))
             if (wives.length > 1) {
                 wives.reduce((prev, item) => {
                     if (!prev) {
@@ -311,6 +311,8 @@
                 const wifeNode = generateNode(x, brotherNode.position().y, wives[0])
                 link(brotherNode, wifeNode)
             }
+            const sons = DATA.filter(item => item.fid === brotherNode.data.id || item.mid === brotherNode.data.id)
+            getSon(brotherNode, sons)
             return brotherNode
         }, null)
     }
@@ -329,21 +331,49 @@
                 initialNode.y = startNode.position().y + nodeHeight + gapY
                 sonNode = generateNode(startNode.position().x, startNode.position().y + nodeHeight + gapY, item)
             } else {
-                if (item.pids.length > 0) {
+                if (item.pids && item.pids.length > 0) {
                     sonNode = generateNode(prev.position().x - (nodeWidth + gapX) * 2, prev.position().y, item)
                 } else {
                     sonNode = generateNode(prev.position().x - (nodeWidth + gapX), prev.position().y, item)
                 }
             }
-            link(startNode, sonNode)
-            if (sonNode.data.pids.length > 0) {
+            let vertices = [
+                {
+                    x: startNode.position().x + nodeWidth / 2,
+                    y: startNode.position().y + nodeHeight + gapY / 2
+                },
+                {
+                    x: sonNode.position().x + nodeWidth / 2,
+                    y: sonNode.position().y - gapY / 2
+                }
+            ]
+            if (sonNode.data.pids && sonNode.data.pids.length > 0) {
                 const wife = DATA.find(item => sonNode.data.pids.includes(item.id + ''))
-                getWife(sonNode, wife)
+                if (wife) {
+                    getWife(sonNode, wife)
+                }
             }
+            if(startNode.data.pids && startNode.data.pids.length > 0) {
+                vertices = [
+                    {
+                        x: startNode.position().x + nodeWidth + gapX / 2,
+                        y: startNode.position().y + nodeHeight / 2
+                    },
+                    {
+                        x: startNode.position().x + nodeWidth + gapX / 2,
+                        y: startNode.position().y + nodeHeight + gapY / 2
+                    },
+                    {
+                        x: sonNode.position().x + nodeWidth / 2,
+                        y: sonNode.position().y - gapY / 2
+                    }
+                ]
+            }
+            link(startNode, sonNode, vertices)
             // 儿子的子代
             const offsprings = DATA.filter(item => item.fid === sonNode.data.id || item.mid === sonNode.data.id)
             if (offsprings.length > 0) {
-                getSon(startNode, offsprings)
+                getSon(sonNode, offsprings)
             }
             return sonNode
         }, null)
@@ -356,7 +386,7 @@
         let wives
         if (startNode.data.gender === 'male') {
             wives = DATA.filter(item => {
-                return startNode.data.pids.includes(item.id + '')
+                return (startNode.data?.pids || []).includes(item.id + '')
             })
             if (wives.length > 0) {
                 wives.forEach(wife => {

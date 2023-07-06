@@ -2,47 +2,53 @@ export default [
     {
         "id": 1,
         "关系": "本人",
-        "姓名": "本人",
+        "姓名": "丁万强",
         "orderid": 0,
-        "详情": "(非农户、在册、安置)",
+        "详情": "(其他、不在册、非安置)",
         "备注": null,
-        "头像": "/Content/Image/femail.png",
+        "头像": "/Content/Image/mail.png",
         "gender": "male",
         "fid": null,
         "mid": null,
-        "pids": [
-            "2",
-            "3"
-        ]
+        "pids": []
     },
     {
-        "id": 2,
-        "关系": "妻子",
-        "姓名": "妻子",
+        "id": 1,
+        "关系": "本人",
+        "姓名": "丁万强",
         "orderid": 0,
-        "详情": "(非农户、在册、安置)",
+        "详情": "(其他、不在册、非安置)",
         "备注": null,
-        "头像": "/Content/Image/femail.png",
-        "gender": "female",
+        "头像": "/Content/Image/mail.png",
+        "gender": "male",
         "fid": null,
         "mid": null,
-        "pids": [
-            "1"
-        ]
+        "pids": []
     },
     {
-        "id": 3,
-        "关系": "前妻",
-        "姓名": "前妻",
+        "id": 1,
+        "关系": "本人",
+        "姓名": "丁万强",
         "orderid": 0,
-        "详情": "(非农户、在册、安置)",
+        "详情": "(其他、不在册、非安置)",
         "备注": null,
-        "头像": "/Content/Image/femail.png",
-        "gender": "female",
+        "头像": "/Content/Image/mail.png",
+        "gender": "male",
         "fid": null,
         "mid": null,
-        "pids": [
-            "1"
-        ]
+        "pids": []
+    },
+    {
+        "id": 1,
+        "关系": "本人",
+        "姓名": "丁万强",
+        "orderid": 0,
+        "详情": "(其他、不在册、非安置)",
+        "备注": null,
+        "头像": "/Content/Image/mail.png",
+        "gender": "male",
+        "fid": null,
+        "mid": null,
+        "pids": []
     },
 ]
