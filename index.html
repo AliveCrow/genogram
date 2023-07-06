@@ -49,6 +49,13 @@
         .female {
             border: 2px solid #BC53AB;
         }
+
+        .html-point {
+            background-image: url("./love.png");
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
     </style>
 </head>
 <body>
@@ -62,6 +69,12 @@
     import DATA from './genogram.js'
 
     const {Graph, Shape} = window.X6
+    const gapX = 80
+    const gapY = 100
+    const nodeWidth = 200
+    const nodeHeight = 100
+    const loveSize = 24
+
     // 注册边
     Graph.registerEdge('x6-edge', {
         zIndex: -1,
@@ -111,6 +124,9 @@
         html: (cell) => {
             const data = cell.getData()
             const wrap = document.createElement('div')
+            wrap.className = 'html-point'
+            wrap.style.width = `${loveSize}px`
+            wrap.style.height = `${loveSize}px`
             return wrap
         },
     })
@@ -127,6 +143,10 @@
         mousewheel: true,
         grid: true,
         autoResize: true,
+        interacting: {
+            nodeMovable: false,
+            edgeMovable: false,
+        },
     })
 
     /**
@@ -179,7 +199,7 @@
             ...(config ? config : {
                 attrs: {
                     line: {
-                        targetMarker: 'classic',
+                        // targetMarker: 'classic',
                     },
                 }
             })
@@ -193,25 +213,32 @@
         if (couples.length > 0) {
             if (benchmark.gender === 'male') { // 男性
                 couples.forEach((couple, index) => {
-                    // 妻子一定在右边
                     const coordinate = {
                         x: benchmarkNode.position().x + (index % 2 === 0 ? (nodeWidth + gapX) : -(nodeWidth + gapX)),
                         y: benchmarkNode.position().y
                     }
                     const coupleNode = generateNode(coordinate.x, coordinate.y, couple)
                     link(benchmarkNode, coupleNode)
+                    graph.addNode({
+                        shape: 'html-point',
+                        x: benchmarkNode.position().x + nodeWidth + gapX / 2 - loveSize / 2,
+                        y: coordinate.y + gapY / 2 - loveSize / 2,
+                    })
                     getElder(coupleNode)
                 })
             } else { // 女性
                 couples.forEach((couple, index) => {
-                    // 丈夫一定在左边
                     const coordinate = {
                         x: benchmarkNode.position().x + (index % 2 === 0 ? (nodeWidth + gapX) : -(nodeWidth + gapX)),
                         y: benchmarkNode.position().y
                     }
+                    graph.addNode({
+                        shape: 'html-point',
+                        x: benchmarkNode.position().x + nodeWidth + gapX / 2 - loveSize / 2,
+                        y: coordinate.y + gapY / 2 - loveSize / 2,
+                    })
                     const coupleNode = generateNode(coordinate.x, coordinate.y, couple)
                     link(benchmarkNode, coupleNode)
-                    getElder(coupleNode)
                 })
             }
         }
@@ -219,37 +246,64 @@
 
     function getElder(benchmarkNode) {
         const benchmark = benchmarkNode.data
+
         function __get(benchmarkNode, nodeData) {
             const benchmark = benchmarkNode.data
             const coordinate = {
                 x: benchmarkNode.position().x,
                 y: benchmarkNode.position().y - (nodeHeight + gapY)
             }
-            if(benchmark.gender === 'male' && nodeData.pids.length > 0) {
+            if (benchmark.gender === 'male' && nodeData.pids.length > 0) {
                 coordinate.x = benchmarkNode.position().x - (nodeWidth + gapX)
             }
             const elderNode = generateNode(coordinate.x, coordinate.y, nodeData)
-            link(benchmarkNode, elderNode, [
-                {
-                    x: benchmarkNode.position().x + nodeWidth + gapX /2,
-                    y: benchmarkNode.position().y + nodeHeight / 2
-                },
-                {
-                    x: benchmarkNode.position().x + nodeWidth + gapX /2,
-                    y: benchmarkNode.position().y - gapY / 2
-                },
-                {
-                    x: elderNode.position().x + nodeWidth + gapX / 2,
-                    y: elderNode.position().y + nodeHeight + gapY / 2
-                },
-                {
-                    x: elderNode.position().x + nodeWidth + gapX / 2,
-                    y: elderNode.position().y + gapY / 2
-                }
-            ])
+            let vertices = []
+            if (benchmark.gender === 'female') {
+                vertices = [
+                    {
+                        x: benchmarkNode.position().x - gapX / 2,
+                        y: benchmarkNode.position().y + nodeHeight / 2
+                    },
+                    {
+                        x: benchmarkNode.position().x - gapX / 2,
+                        y: benchmarkNode.position().y - gapY / 2
+                    },
+                    {
+                        x: elderNode.position().x + nodeWidth + gapX / 2,
+                        y: elderNode.position().y + nodeHeight + gapY / 2
+                    },
+                    {
+                        x: elderNode.position().x + nodeWidth + gapX / 2,
+                        y: elderNode.position().y + gapY / 2
+                    }
+                ]
+                getPeer(elderNode, 'R')
+            } else {
+                vertices = [
+                    {
+                        x: benchmarkNode.position().x + nodeWidth + gapX / 2,
+                        y: benchmarkNode.position().y + nodeHeight / 2
+                    },
+                    {
+                        x: benchmarkNode.position().x + nodeWidth + gapX / 2,
+                        y: benchmarkNode.position().y - gapY / 2
+                    },
+                    {
+                        x: elderNode.position().x + nodeWidth + gapX / 2,
+                        y: elderNode.position().y + nodeHeight + gapY / 2
+                    },
+                    {
+                        x: elderNode.position().x + nodeWidth + gapX / 2,
+                        y: elderNode.position().y + gapY / 2
+                    }
+                ]
+                getPeer(elderNode)
+            }
+            link(benchmarkNode, elderNode, vertices)
             getCouple(elderNode)
             getElder(elderNode)
         }
+
         const elders = DATA.filter(item => item.id === benchmark.fid || item.id === benchmark.mid)
         const father = elders.find(item => item.gender === 'male')
         const mother = elders.find(item => item.gender === 'female')
@@ -262,27 +316,198 @@
         }
     }
 
+    function getOffSpring(benchmarkNode) {
+        const benchmark = benchmarkNode.data
+        let offsprings = null // 子辈
+        offsprings = DATA.filter(item => item.fid === benchmark.id || item.mid === benchmark.id)
+        if (offsprings.length > 0) {
+            const coordinate = {
+                x: 0,
+                y: 0
+            }
+            offsprings.reduce((prev, cur, index) => {
+                const prevNode = prev ? prev : benchmarkNode
+                coordinate.x = prevNode.position().x
+                coordinate.y = benchmarkNode.position().y + (nodeHeight + gapY)
 
-    const gapX = 80
-    const gapY = 100
-    const nodeWidth = 200
-    const nodeHeight = 100
+                if (prevNode.data.pids.length > 0 && prevNode.data.id !== benchmark.id) {
+                    coordinate.x = prevNode.position().x - (nodeWidth + gapX) * 2
+                }
+                if(cur.pids.length > 0) {
+                    coordinate.x = prevNode.position().x - (nodeWidth + gapX) * 2
+                } else {
+                    if(prevNode.data.id !== benchmark.id) {
+                        coordinate.x = prevNode.position().x - (nodeWidth + gapX)
+                    }
+                }
+                const offspringNode = generateNode(coordinate.x, coordinate.y, cur)
+                let vertices = [
+                    {
+                        x: benchmarkNode.position().x + nodeWidth + gapX / 2,
+                        y: benchmarkNode.position().y + nodeHeight / 2
+                    },
+                    {
+                        x: benchmarkNode.position().x + nodeWidth + gapX / 2,
+                        y: benchmarkNode.position().y + nodeHeight + gapY / 2
+                    },
+                    {
+                        x: offspringNode.position().x + nodeWidth / 2,
+                        y: offspringNode.position().y - gapY / 2
+                    }
+                ]
+                if (cur.pids.length > 0) {
+                    vertices = [
+                        {
+                            x: benchmarkNode.position().x + nodeWidth + gapX / 2,
+                            y: benchmarkNode.position().y + nodeHeight / 2
+                        },
+                        {
+                            x: benchmarkNode.position().x + nodeWidth + gapX / 2,
+                            y: benchmarkNode.position().y + nodeHeight + gapY / 2
+                        },
+                        {
+                            x: offspringNode.position().x + nodeWidth + gapX / 2,
+                            y: offspringNode.position().y - gapY / 2
+                        },
+                        {
+                            x: offspringNode.position().x + nodeWidth + gapX / 2,
+                            y: offspringNode.position().y + nodeHeight / 2
+                        }
+                    ]
+                }
+                link(benchmarkNode, offspringNode, vertices)
+                getCouple(offspringNode)
+                getOffSpring(offspringNode)
+                return offspringNode
+            }, null)
+        }
+    }
+
+    function getPeer(benchmarkNode, direction = 'L') {
+        const benchmark = benchmarkNode.data
+        function __getPeerData(baseData) {
+            return DATA.filter(item => baseData.fid && baseData.mid && item.id !== baseData.id && (item.fid === baseData.fid || item.mid === baseData.mid))
+        }
+        let peers = DATA.filter(item =>  benchmark.fid && benchmark.mid && item.id !== benchmark.id && (item.fid === benchmark.fid || item.mid === benchmark.mid))
+        if(benchmark.pids.length > 0) {
+            const couples = DATA.filter(item => benchmark.pids.includes(item.id + ''))
+            couples.forEach(couple => {
+                peers = peers.concat(__getPeerData(couple))
+            })
+        }
+        if (peers.length > 0) {
+            peers.reduce((prev, cur) => {
+                let peerNode = null
+                let vertices = []
+                const prevNode = prev ? prev : benchmarkNode
+                const coordinate = {
+                    x: prevNode.position().x + (nodeWidth + gapX),
+                    y: prevNode.position().y
+                }
+                if (direction === 'R') {
+                    if (prevNode.data.pids.length > 0) {
+                        coordinate.x = coordinate.x + (nodeWidth + gapX)
+                    }
+                    peerNode = generateNode(coordinate.x, coordinate.y, cur)
+                    vertices = [
+                        {
+                            x: benchmarkNode.position().x + (nodeWidth / 2),
+                            y: benchmarkNode.position().y - gapY / 2
+                        },
+                        {
+                            x: benchmarkNode.position().x + (nodeWidth + gapX / 2),
+                            y: benchmarkNode.position().y - gapY / 2
+                        },
+                        {
+                            x: peerNode.position().x + (nodeWidth / 2),
+                            y: peerNode.position().y - gapY / 2
+                        }
+                    ]
+                    if (peerNode.data.pids.length > 0) {
+                        vertices = [
+                            {
+                                x: benchmarkNode.position().x + (nodeWidth / 2),
+                                y: benchmarkNode.position().y - gapY / 2
+                            },
+                            {
+                                x: benchmarkNode.position().x + (nodeWidth + gapX / 2),
+                                y: benchmarkNode.position().y - gapY / 2
+                            },
+                            {
+                                x: peerNode.position().x + (nodeWidth + gapX / 2),
+                                y: peerNode.position().y - gapY / 2
+                            },
+                            {
+                                x: peerNode.position().x + (nodeWidth + gapX / 2),
+                                y: peerNode.position().y + nodeHeight / 2
+                            }
+                        ]
+                    }
+                } else {
+                    coordinate.x = prevNode.position().x - (nodeWidth + gapX)
+                    if (cur.pids.length > 0) {
+                        coordinate.x = coordinate.x - (nodeWidth + gapX)
+                    }
+                    peerNode = generateNode(coordinate.x, coordinate.y, cur)
+                    vertices = [
+                        {
+                            x: benchmarkNode.position().x + (nodeWidth + gapX / 2),
+                            y: benchmarkNode.position().y + nodeHeight / 2
+                        },
+                        {
+                            x: benchmarkNode.position().x + nodeWidth + gapX / 2,
+                            y: benchmarkNode.position().y - gapY / 2
+                        },
+                        {
+                            x: peerNode.position().x + nodeWidth / 2,
+                            y: peerNode.position().y - gapY / 2
+                        },
+                        {
+                            x: peerNode.position().x + nodeWidth / 2,
+                            y: peerNode.position().y - 2
+                        },
+                    ]
+                    if (peerNode.data.pids.length > 0) {
+                        vertices = [
+                            {
+                                x: benchmarkNode.position().x + (nodeWidth + gapX / 2),
+                                y: benchmarkNode.position().y + nodeHeight / 2
+                            },
+                            {
+                                x: benchmarkNode.position().x + nodeWidth + gapX / 2,
+                                y: benchmarkNode.position().y - gapY / 2
+                            },
+                            {
+                                x: peerNode.position().x + nodeWidth + gapX / 2,
+                                y: peerNode.position().y - gapY / 2
+                            },
+                            {
+                                x: peerNode.position().x + nodeWidth + gapX / 2,
+                                y: peerNode.position().y + nodeHeight / 2
+                            }
+                        ]
+                    }
+                }
+                getCouple(peerNode)
+                link(benchmarkNode, peerNode, vertices)
+                return peerNode
+            }, null)
+        }
+    }
+
     // 定值
     const mine = DATA.find(item => item['姓名'] === '本人')
     const mineNode = generateNode(0, 0, mine)
 
-    function init(benchmarkNode, direction = 'L') {
-        const benchmark = benchmarkNode.data
-        let elders = null // 长辈
-        let peers = null // 同辈
-        let offsprings = null // 子辈
-        let couples = null // 夫妻
-
+    function init(benchmarkNode) {
         // 获取妻子(目前只考虑两位妻子的情况)
         getCouple(mineNode)
         // 获取父母 (以父亲为基准)
         getElder(benchmarkNode)
-
+        // 获取子辈
+        getOffSpring(benchmarkNode)
+        // 获取同辈
+        getPeer(mineNode)
     }
 
     init(mineNode)
