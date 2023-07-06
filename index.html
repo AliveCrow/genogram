@@ -290,6 +290,17 @@
         return maxNum
     }
 
+    function getMaxElderLength(data, max = 0) {
+        const elders = DATA.filter(item => item.id === data.fid || item.id === data.mid)
+        let maxNum = max > elders.length ? max : elders.length
+        if (elders.length > 0) {
+            elders.forEach(son => {
+                maxNum = max > getMaxLength(son, maxNum) ? max : getMaxLength(son, maxNum)
+            })
+        }
+        return maxNum
+    }
+
     /**
      * 妻子节点
      * @param baseNode
@@ -306,10 +317,18 @@
             case 0:
                 break
             case 1:
-                const coupleNode = generateNode(coordinate.x + nodeGapX, coordinate.y, couples[0])
-                link(baseNode, coupleNode)
-                getElder(coupleNode)
-                // getPeer(coupleNode)
+                if (baseData.gender === 'male') {
+                    const coupleNode = generateNode(coordinate.x + nodeGapX, coordinate.y, couples[0])
+                    link(baseNode, coupleNode)
+                    getElderNew(coupleNode)
+                    getPeer(coupleNode)
+                }
+                if (baseData.gender === 'female') {
+                    const coupleNode = generateNode(coordinate.x - nodeGapX, coordinate.y, couples[0])
+                    link(baseNode, coupleNode)
+                    getElderNew(coupleNode)
+                    getPeer(coupleNode)
+                }
                 break
             case 2:
                 couples.forEach((item, index) => {
@@ -349,12 +368,15 @@
                     // fatherNode
                     coordinate.x = baseNode.position().x + (hasMother ? -nodeGapX : 0)
                     coordinate.y = baseNode.position().y - nodeGapY
-                    const fatherNode = generateNode(coordinate.x, coordinate.y, father)
+                    let elderMax = getMaxElderLength(father)
+                    const gap = elderMax > 0 ? nodeGapX * (elderMax - 1) : 0
+                    const fatherNode = generateNode(coordinate.x - gap, coordinate.y, father)
                     link(baseNode, fatherNode, [
                         ...getLink(baseNode, true),
                         ...getLink(fatherNode, !hasMother, 'B'),
                     ])
                     getElder(fatherNode)
+                    getPeer(fatherNode)
                     if (hasMother) {
                         getCouples(fatherNode)
                     }
@@ -385,12 +407,15 @@
                     // fatherNode
                     coordinate.x = baseNode.position().x
                     coordinate.y = baseNode.position().y - nodeGapY
-                    const fatherNode = generateNode(coordinate.x, coordinate.y, father)
+                    let max = getMaxElderLength(father)
+                    const gap = max > 0 ? nodeGapX * (max - 1) : 0
+                    const fatherNode = generateNode(coordinate.x + gap, coordinate.y, father)
                     link(baseNode, fatherNode, [
                         ...getLink(baseNode, true),
                         ...getLink(fatherNode, false, 'B'),
                     ])
                     getElder(fatherNode)
+                    // getPeer(fatherNode)
                     if (hasMother) {
                         getCouples(fatherNode)
                     }
@@ -431,29 +456,124 @@
                 coordinate.x = prevNode.position().x - nodeGapX
                 coordinate.y = prevNode.position().y
                 const maxLength = getMaxLength(cur)
-                console.log(cur,cur.pids, maxLength)
-                if(cur?.pids && cur.pids.length > 0) {
+                if (cur?.pids && cur.pids.length > 0) {
                     coordinate.x = coordinate.x - nodeGapX * (maxLength + 1)
                     node = generateNode(coordinate.x, coordinate.y, cur)
-                    getCouples(node)
-                    const sons = DATA.filter(item => item.fid === node.data.id || item.mid === node.data.id)
-                    {
-                        sons.reduce((prev, cur) => {
-                            const prevNode = prev? prev : node
-                            coordinate.x = prevNode.position().x + nodeGapX
-                            coordinate.y = prevNode.position().y + nodeGapY
-                            const node1 = generateNode(coordinate.x, coordinate.y, cur)
-                            link(node1, node, [
-                                ...getLink(node1, true),
-                                ...getLink(node, false, 'B'),
-                            ])
-                            getCouples(node1)
-                            return node1
-                        }, null)
-                    }
+                } else {
+                    node = generateNode(coordinate.x, coordinate.y, cur)
                 }
+                getCouples(node)
                 return node
             }, null)
+        } else {
+            peers.reduce((prev, cur) => {
+                const prevNode = prev ? prev : baseNode
+                coordinate.x = prevNode.position().x + nodeGapX
+                coordinate.y = prevNode.position().y
+                const maxLength = getMaxLength(cur)
+                if (cur?.pids && cur.pids.length > 0) {
+                    coordinate.x = coordinate.x + nodeGapX * (maxLength + 1)
+                    node = generateNode(coordinate.x, coordinate.y, cur)
+                } else {
+                    node = generateNode(coordinate.x, coordinate.y, cur)
+                }
+                link(baseNode, node, [
+                    {
+                        x: baseNode.position().x + nodeWidth / 2,
+                        y: baseNode.position().y - gapY / 2
+                    },
+                    {
+                        x: node.position().x + nodeWidth / 2,
+                        y: node.position().y - gapY / 2
+                    }
+                ])
+                getCouples(node)
+                return node
+            }, null)
+        }
+    }
+
+    function getElderNew(baseNode) {
+        const coordinate = {
+            x: baseNode.position().x,
+            y: baseNode.position().y
+        } // 坐标
+        const baseData = baseNode.data
+
+        // 最长同辈长度
+        function getPeerMaxLength(data, max = 0) {
+            const elders = DATA.filter(item => item.id === data.fid || item.id === data.mid)
+            let maxNum = max > elders.length ? max : elders.length
+            if (elders.length > 0) {
+                elders.forEach(elder => {
+                    maxNum = max > getMaxLength(elder, maxNum) ? max : getMaxLength(elder, maxNum)
+                })
+            }
+            return maxNum
+        }
+
+        const elders = DATA.filter(item => item.id === baseData.fid || item.id === baseData.mid)
+        let max = 0
+        elders.reduce((prev, cur) => {
+            let num = getPeerMaxLength(cur)
+            max = (prev > num ? prev : num) // 同辈中的最多的数量
+            return prev > num ? prev : num
+        }, 0)
+        if (baseData.gender === 'male') {
+            if (elders.length > 0) {
+                const father = elders.find(item => item.gender === 'male')
+                const mother = elders.find(item => item.gender === 'female')
+                coordinate.x = baseNode.position().x - (nodeGapX * max + nodeGapX)
+                coordinate.y = baseNode.position().y - nodeGapY
+                const fatherNode = generateNode(coordinate.x, coordinate.y, father)
+                link(baseNode, fatherNode, [
+                    {
+                        x: baseNode.position().x + nodeWidth / 2,
+                        y: baseNode.position().y - gapY / 2
+                    },
+                    {
+                        x: fatherNode.position().x + nodeWidth + gapX / 2,
+                        y: fatherNode.position().y + gapY / 2 + nodeHeight
+                    },
+                    {
+                        x: fatherNode.position().x + nodeWidth + gapX / 2,
+                        y: fatherNode.position().y + gapY / 2
+                    }
+                ])
+                getElderNew(fatherNode)
+                getPeer(fatherNode)
+                if (mother) {
+                    getCouples(fatherNode)
+                }
+            }
+        }
+        if (baseData.gender === 'female') {
+            if (elders.length > 0) {
+                const father = elders.find(item => item.gender === 'male')
+                const mother = elders.find(item => item.gender === 'female')
+                coordinate.x = baseNode.position().x + (nodeGapX * max)
+                coordinate.y = baseNode.position().y - nodeGapY
+                const fatherNode = generateNode(coordinate.x, coordinate.y, father)
+                link(baseNode, fatherNode, [
+                    {
+                        x: baseNode.position().x + nodeWidth / 2,
+                        y: baseNode.position().y - gapY / 2
+                    },
+                    {
+                        x: fatherNode.position().x + nodeWidth + gapX / 2,
+                        y: fatherNode.position().y + gapY / 2 + nodeHeight
+                    },
+                    {
+                        x: fatherNode.position().x + nodeWidth + gapX / 2,
+                        y: fatherNode.position().y + gapY / 2
+                    }
+                ])
+                getElderNew(fatherNode)
+                getPeer(fatherNode)
+                if (mother) {
+                    getCouples(fatherNode)
+                }
+            }
         }
     }
 
@@ -462,7 +582,7 @@
         // 获取对象(目前只考虑两位妻子的情况)
         getCouples(benchmarkNode)
         // 获取父母 (以父亲为基准)
-        getElder(benchmarkNode)
+        getElderNew(benchmarkNode)
         // 获取子辈
         // getOffSpring(benchmarkNode)
         // 获取同辈
