@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <script src="x6.min.js"></script>
+    <title>家系图</title>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+        }
+
+        #box {
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .wrap {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            background-color: #fff;
+            /*padding: 20px;*/
+            font-size: 14px;
+        }
+
+        .node-header {
+            position: absolute;
+            top: 0;
+            color: #fff;
+            text-align: center;
+            width: 100%;
+            height: 20px;
+            font-size: 12px;
+        }
+
+        .male {
+            border: 2px solid #9254de;
+        }
+
+        .female {
+            border: 2px solid #BC53AB;
+        }
+
+        .html-point {
+            background-image: url("./love.png");
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+    </style>
+</head>
+<body>
+<div id="box">
+    <div style="width: 100%; height: 100%;">
+        <div id="container"></div>
+    </div>
+</div>
+<script type="module" src="helper.js"></script>
+<script type="module">
+    import DATA from './genogram.js'
+    import {
+        generateNode,
+        link,
+        isMale,
+        getMaxPeerNum,
+        getMaxCoupleNum,
+        graph
+    } from './helper.js'
+
+    // region 获取本人节点
+    const mine = DATA.find(item => item['关系'] === '本人')
+    const mineNode = generateNode(0, 0, mine)
+    // endregion
+
+    const gapX = 80
+    const gapY = 100
+    const nodeWidth = mineNode.size().width
+    const nodeHeight = mineNode.size().height
+    const loveSize = 24
+    // 节点之间的韩间距
+    const nodeGapX = nodeWidth + gapX
+    const nodeGapY = nodeHeight + gapY
+
+    /**
+     * 妻子
+     * @param baseNode
+     * @returns {null}
+     */
+    function getCouples(baseNode) {
+        // 坐标
+        const coordinate = {
+            x: baseNode.position().x,
+            y: baseNode.position().y
+        }
+        const baseData = baseNode.data
+        // baseData 的对象
+        const couples = DATA.filter(item => (baseData?.pids || []).includes(item.id + ''))
+        let coupleNode = null
+
+        if (couples.length === 1) {
+            if (isMale(baseData)) {
+                coupleNode = generateNode(coordinate.x + nodeGapX, coordinate.y, couples[0])
+            } else {
+                coupleNode = generateNode(coordinate.x - nodeGapX, coordinate.y, couples[0])
+            }
+            link(baseNode, coupleNode)
+            getElder(coupleNode)
+            getPeer(coupleNode)
+        }
+        if (couples.length === 2) {
+            // 只考虑两位妻子
+            couples.forEach((item, index) => {
+                coordinate.x = baseNode.position().x + (index === 0 ? nodeGapX : -nodeGapX)
+                coupleNode = generateNode(coordinate.x, coordinate.y, item)
+                link(baseNode, coupleNode)
+                getElder(coupleNode)
+                getPeer(coupleNode)
+            })
+
+        }
+    }
+
+    function getElder(baseNode) {
+        // 坐标
+        const coordinate = {
+            x: baseNode.position().x,
+            y: baseNode.position().y
+        }
+        const baseData = baseNode.data
+        // baseNode 的父母
+        const elders = DATA.filter(item => item.id === baseData.fid || item.id === baseData.mid)
+        /**
+         * 父母都存在
+         */
+        if (elders.length === 2) {
+            const father = elders.find(item => item.id === baseData.fid)
+            const mother = elders.find(item => item.id === baseData.mid)
+            coordinate.x = baseNode.position().x
+            coordinate.y = baseNode.position().y - nodeGapY
+            const elderNode = generateNode(coordinate.x, coordinate.y, father)
+            if (isMale(baseData)) {
+                //  节点的同辈数量
+                let maxPeerNum = getMaxPeerNum(mother)
+                console.log(mother, maxPeerNum)
+                elderNode.position(elderNode.position().x - (nodeGapX * maxPeerNum + nodeGapX), elderNode.position().y)
+
+            } else {
+                //  节点的同辈数量
+                let maxPeerNum = getMaxPeerNum(father)
+                elderNode.position(elderNode.position().x + (nodeGapX * maxPeerNum), elderNode.position().y)
+            }
+            getCouples(elderNode)
+            getElder(elderNode)
+            getPeer(elderNode)
+            link(baseNode, elderNode, [
+                {
+                    x: baseNode.position().x + nodeWidth / 2,
+                    y: baseNode.position().y - gapY / 2
+                },
+                {
+                    x: elderNode.position().x + (nodeWidth + gapX / 2),
+                    y: elderNode.position().y + nodeHeight + gapY / 2
+                },
+                {
+                    x: elderNode.position().x + (nodeWidth + gapX / 2),
+                    y: elderNode.position().y + nodeHeight / 2
+                }
+            ])
+        }
+        /**
+         * 只有父亲或者母亲
+         */
+        if (elders.length === 1) {
+            coordinate.x = baseNode.position().x - nodeGapX
+            coordinate.y = baseNode.position().y - nodeGapY
+            const elderNode = generateNode(coordinate.x, coordinate.y, elders[0])
+            //  节点的同辈数量
+            let maxPeerNum = getMaxPeerNum(elders[0])
+            if (isMale(elders[0])) {
+                elderNode.position(elderNode.position().x - (nodeGapX * maxPeerNum), elderNode.position().y)
+            } else {
+                elderNode.position(elderNode.position().x + (nodeGapX * maxPeerNum), elderNode.position().y)
+            }
+            getCouples(elderNode)
+            link(baseNode, elderNode, [
+                {
+                    x: baseNode.position().x + nodeWidth / 2,
+                    y: baseNode.position().y - gapY / 2
+                },
+                {
+                    x: elderNode.position().x + (nodeWidth + gapX / 2),
+                    y: elderNode.position().y + nodeHeight + gapY / 2
+                },
+                {
+                    x: elderNode.position().x + (nodeWidth + gapX / 2),
+                    y: elderNode.position().y + nodeHeight / 2
+                }
+            ])
+        }
+    }
+
+    function getPeer(baseNode) {
+        const coordinate = {
+            x: baseNode.position().x,
+            y: baseNode.position().y
+        }
+        const baseData = baseNode.data
+        const peers = DATA.filter(item => item.fid && item.mid && item.id !== baseData.id && (item.fid === baseData.fid || item.mid === baseData.mid))
+        let peerNode = null
+        if (isMale(baseData)) {
+            // 男性的同辈放在左边
+            peers.reduce((prev, cur) => {
+                const prevNode = prev ? prev : baseNode
+                const prevWivesNum = getMaxCoupleNum(prevNode.data)
+                const curWivesNum = getMaxCoupleNum(cur)
+                if (isMale(cur)) {
+                    coordinate.x = prevNode.position().x - (nodeGapX * (prevWivesNum))
+                    if (curWivesNum > 0) {
+                        coordinate.x = coordinate.x - nodeGapX
+                    }
+                    if (prevWivesNum > 0) {
+                        if(prevNode.data.pids.length > 1) {
+                            coordinate.x = coordinate.x - nodeGapX
+                        }
+                    }
+                } else {
+                    coordinate.x = prevNode.position().x - (nodeGapX + nodeGapX * (prevWivesNum))
+                }
+                peerNode = generateNode(coordinate.x, prevNode.position().y, cur)
+                link(baseNode, peerNode, [
+                    {
+                        x: baseNode.position().x + nodeWidth / 2,
+                        y: baseNode.position().y - gapY / 2
+                    },
+                    {
+                        x: peerNode.position().x + nodeWidth / 2,
+                        y: peerNode.position().y - gapY / 2
+                    }
+                ])
+                getCouples(peerNode)
+                return peerNode
+            }, null)
+        } else {
+            // 女性的同辈放在右边
+            peers.reduce((prev, cur) => {
+                const prevNode = prev ? prev : baseNode
+                const prevWivesNum = getMaxCoupleNum(prevNode.data)
+                const curWivesNum = getMaxCoupleNum(cur)
+                let peerNode = null
+                if (isMale(cur)) {
+                    coordinate.x = prevNode.position().x + (nodeGapX * (prevWivesNum >= 1 ? prevWivesNum : 1))
+                } else {
+                    coordinate.x = prevNode.position().x + (nodeGapX * (prevWivesNum >= 1 ? prevWivesNum : 1))
+                    if(prevNode.data.gender === 'female' && curWivesNum > 0) {
+                        coordinate.x = coordinate.x + nodeGapX
+                    }
+                    if (prevNode.data?.pids && prevNode.data?.pids.length > 0 && prevNode.data.gender === 'male') {
+                        coordinate.x = coordinate.x + nodeGapX * 2
+                    }
+                }
+                peerNode = generateNode(coordinate.x, prevNode.position().y, cur)
+                link(baseNode, peerNode, [
+                    {
+                        x: baseNode.position().x + nodeWidth / 2,
+                        y: baseNode.position().y - gapY / 2
+                    },
+                    {
+                        x: peerNode.position().x + nodeWidth / 2,
+                        y: peerNode.position().y - gapY / 2
+                    }
+                ])
+                getCouples(peerNode)
+                return peerNode
+            }, null)
+        }
+    }
+
+    function getOffSpring(baseNode) {
+        const baseData = baseNode.data
+        const offSprings = DATA.filter(item => item.fid === baseData.id || item.mid === baseData.id)
+        const center = Math.ceil(offSprings.length / 2)
+        offSprings.reduce((prev, cur, index) => {
+            const prevNode = prev ? prev : baseNode
+            const prevWivesNum = getMaxCoupleNum(prevNode.data)
+            const curWivesNum = getMaxCoupleNum(cur)
+            let offSpringNode = null
+            if (index === 0) {
+                offSpringNode = generateNode(baseNode.position().x - nodeGapX * center, baseNode.position().y + nodeGapY, cur)
+            } else {
+                offSpringNode = generateNode(prevNode.position().x + nodeGapX, baseNode.position().y + nodeGapY, cur)
+                if (prevWivesNum > 0) {
+                    offSpringNode.position(offSpringNode.position().x + nodeGapX, prevNode.position().y)
+                }
+            }
+            link(baseNode, offSpringNode, [
+                {
+                    x: baseNode.position().x + nodeWidth + gapX / 2,
+                    y: baseNode.position().y + nodeHeight / 2
+                },
+                {
+                    x: baseNode.position().x + nodeWidth + gapX / 2,
+                    y: baseNode.position().y + (nodeHeight + gapY / 2)
+                },
+                {
+                    x: offSpringNode.position().x + nodeWidth / 2,
+                    y: offSpringNode.position().y - gapY / 2
+                }
+            ])
+            getCouples(offSpringNode)
+            // getOffSpring(offSpringNode)
+            return offSpringNode
+        }, null)
+    }
+
+    function getSons(baseNode) {
+        const baseData = baseNode.data
+        const sons = DATA.filter(item => item.fid === baseData.id || item.mid === baseData.id)
+        console.log(sons)
+        const sonNode = generateNode(baseNode.position().x, baseNode.position().y + nodeGapY, sons[0])
+        getPeer(sonNode)
+    }
+
+    // 获取对象(目前只考虑两位妻子的情况)
+    getCouples(mineNode)
+    getElder(mineNode)
+    getPeer(mineNode)
+    // getOffSpring(mineNode)
+    getSons(mineNode)
+
+
+    graph.zoomToFit({
+        maxScale: 1,
+        padding: 30
+    })
+    graph.centerContent()
+</script>
+</body>
+</html>
