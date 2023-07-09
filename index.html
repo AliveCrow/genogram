@@ -67,6 +67,9 @@
 <script type="module" src="helper.js"></script>
 <script type="module">
     import DATA from './genogram.js'
+
+    console.log(DATA)
+
     import {
         generateNode,
         link,
@@ -76,11 +79,110 @@
         graph
     } from './helper.js'
 
+    // region 函数
+
+    // 是否有子代
+    function hasChildren({fatherNode, motherNode}, arr = DATA) {
+        const father = fatherNode.data
+        const mother = motherNode.data
+        return arr.some(item => item.fid && item.mid && item.fid === father.id && item.mid === mother.id)
+    }
+
+    // 是否有配偶
+    function hasSpouse(node, arr = DATA) {
+        const nodeData = node.data
+        const spouses = nodeData.pids || []
+        if (spouses.length > 0) {
+            return arr.some(item => spouses.includes(item.id + ''))
+        }
+        return false
+    }
+
+    // 是否有父母
+    function hasParent(node, arr = DATA) {
+        const nodeData = node.data
+        return arr.some(item => item.id === nodeData.fid || item.id === nodeData.mid)
+    }
+
+    // 是否有同辈
+    function hasPeers(node, arr = DATA) {
+        const nodeData = node.data
+        return arr.some(item => item.fid && item.mid && item.id !== nodeData.id && (item.fid === nodeData.fid || item.mid === nodeData.mid))
+    }
+
+    // 获取子代
+    function getChildren({fatherNode, motherNode}, arr = DATA) {
+        const father = fatherNode.data
+        const mother = motherNode.data
+        return arr.filter(item => item.fid && item.mid && item.fid === father.id && item.mid === mother.id)
+    }
+
+    // 获取配偶
+    function getSpouses(node, arr = DATA) {
+        const nodeData = node.data
+        const spouses = nodeData.pids || []
+        if (spouses.length > 0) {
+            return arr.filter(item => spouses.includes(item.id + ''))
+        }
+        return []
+    }
+
+    // 获取长辈
+    function getParent(childNode, arr = DATA) {
+        const childData = childNode.data
+        return arr.filter(item => item.id === childData.fid || item.id === childData.mid)
+    }
+
+    // 生成配偶节点并链接
+    function generateCoupleNode(node, func = () => {}) {
+        let spouseNode = null
+        if (hasSpouse(node)) {
+            if(hasSpouse(node)) {
+                const spouses = getSpouses(node)
+                // 生成配偶节点
+                for (const spousesKey in spouses) {
+                    const index = spousesKey * 1
+                    const spouse = spouses[spousesKey]
+                    spouseNode = generateNode(node.position().x + (index === 0 ? nodeGapX : -nodeGapX), node.position().y, spouse)
+                    link(node, spouseNode)
+                    func({node, spouseNode})
+                }
+            }
+        }
+    }
+    // 生成父母节点并链接
+    function generateParentNode(node) {
+        if (hasParent(node)) {
+            const parent = getParent(node)
+            const {x, y} = node.position()
+            switch (parent.length) {
+                case 1:
+                    const parentNode = generateNode(x, y - nodeGapY, parent[0])
+                    link(node, parentNode)
+                    break
+                case 2:
+                    /**
+                     * 爸爸妈妈都在就以爸爸为基准
+                     */
+                    const father = parent.find(item => item.gender === 'male');
+                    const fatherNode = generateNode(x, y - nodeGapY, father)
+                    link(node, fatherNode)
+                    generateCoupleNode(fatherNode)
+                    break
+                default:
+                    break
+            }
+        }
+    }
+
+    // endregion
+
     // region 获取本人节点
     const mine = DATA.find(item => item['关系'] === '本人')
     const mineNode = generateNode(0, 0, mine)
     // endregion
 
+    // region 常量
     const gapX = 80
     const gapY = 100
     const nodeWidth = mineNode.size().width
@@ -89,21 +191,33 @@
     // 节点之间的韩间距
     const nodeGapX = nodeWidth + gapX
     const nodeGapY = nodeHeight + gapY
+    // endregion
 
-    const hashmap = new Map();
+    /**
+     * 是否有配偶（只支持最多两个配偶，一左一右）
+     * TODO 两个以上的配偶
+     */
+    generateCoupleNode(mineNode, ({node, spouseNode}) => {
+        const direction = node.position().x - spouseNode.position().x // direction < 0 为右边的节点
+        // 和配偶是否有孩子
+        if (hasChildren({fatherNode: node, motherNode: spouseNode})) {
+            const children = getChildren({fatherNode: node, motherNode: spouseNode})
+            children.forEach((child, childIndex) => {
+                const childNode = generateNode(node.position().x + direction < 0 ? nodeGapX * (childIndex + 1) : -(nodeGapX * (childIndex + 1)), node.position().y + nodeGapY, child)
+                link(node, childNode)
+            })
+        }
+    })
+    generateParentNode(mineNode)
 
-    hashmap.set('1', 700);
-    hashmap.set('2', [1,2,3]);
-    hashmap.set('3', "This is a string");
-    hashmap.set('12', ()=>{console.log("Hello World")});
 
-    console.log(hashmap);
-
+    // region 画布设置
     graph.zoomToFit({
         maxScale: 1,
         padding: 30
     })
     graph.centerContent()
+    // endregion
 </script>
 </body>
 </html>
