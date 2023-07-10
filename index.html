@@ -110,6 +110,12 @@
         return arr.some(item => item.fid && item.mid && item.id !== nodeData.id && (item.fid === nodeData.fid || item.mid === nodeData.mid))
     }
 
+    // 获取同辈
+    function getPeers(node, arr = DATA) {
+        const nodeData = node.data
+        return arr.filter(item => item.fid && item.mid && item.id !== nodeData.id && (item.fid === nodeData.fid || item.mid === nodeData.mid))
+    }
+
     // 获取子代
     function getChildren({fatherNode, motherNode}, arr = DATA) {
         const father = fatherNode.data
@@ -134,24 +140,106 @@
     }
 
     // 生成配偶节点并链接
-    function generateCoupleNode(node, func = () => {}) {
+    function generateCoupleNode(node, generateChild = true) {
         let spouseNode = null
         if (hasSpouse(node)) {
-            if(hasSpouse(node)) {
-                const spouses = getSpouses(node)
-                // 生成配偶节点
-                for (const spousesKey in spouses) {
-                    const index = spousesKey * 1
-                    const spouse = spouses[spousesKey]
-                    spouseNode = generateNode(node.position().x + (index === 0 ? nodeGapX : -nodeGapX), node.position().y, spouse)
-                    link(node, spouseNode)
-                    func({node, spouseNode})
+            const spouses = getSpouses(node)
+            // 生成配偶节点
+            for (const spousesKey in spouses) {
+                const index = spousesKey * 1
+                const spouse = spouses[spousesKey]
+                spouseNode = generateNode(node.position().x + (index === 0 ? nodeGapX : -nodeGapX), node.position().y, spouse)
+                link(node, spouseNode)
+                generatePeerNode(spouseNode)
+                generateParentNode(spouseNode)
+                if (spouseNode && generateChild) {
+                    generateChildNode({fatherNode: node, motherNode: spouseNode})
                 }
             }
         }
     }
+
+    // 生成同辈节点并链接
+    function generatePeerNode(node) {
+        let peerNode = null
+        if (hasPeers(node)) {
+            if (isMale(node.data)) {
+                const fatherPeers = getPeers(node)
+                fatherPeers.reduce((prev, cur, index) => {
+                    const prevNode = prev ? prev : node
+                    peerNode = generateNode(prevNode.position().x - nodeGapX, prevNode.position().y, cur)
+                    // link
+                    const prevNodeSpouse = getSpouses(prevNode)
+                    const curNodeSpouse = getSpouses(peerNode)
+                    if (prevNodeSpouse.length === 1) {
+                        if (curNodeSpouse.length > 0) {
+                            peerNode.position(peerNode.position().x - nodeGapX, prevNode.position().y)
+                        }
+                    }
+                    if (prevNodeSpouse.length === 2) {
+                        if (curNodeSpouse.length > 0) {
+                            peerNode.position(peerNode.position().x - nodeGapX * 2, prevNode.position().y)
+                        } else {
+                            peerNode.position(peerNode.position().x - nodeGapX, prevNode.position().y)
+                        }
+                    }
+                    link(node, peerNode, [
+                        {
+                            x: node.position().x + nodeWidth / 2,
+                            y: node.position().y - gapY / 2
+                        },
+                        {
+                            x: peerNode.position().x + nodeWidth / 2,
+                            y: peerNode.position().y - gapY / 2
+                        }
+                    ])
+                    if (peerNode) {
+                        generateCoupleNode(peerNode)
+                    }
+                    return peerNode
+                }, peerNode)
+            } else {
+                const motherPeers = getPeers(node)
+                motherPeers.reduce((prev, cur, index) => {
+                    const prevNode = prev ? prev : node
+                    peerNode = generateNode(prevNode.position().x + nodeGapX, prevNode.position().y, cur)
+                    // link
+                    const prevNodeSpouse = getSpouses(prevNode)
+                    const curNodeSpouse = getSpouses(peerNode)
+                    if (prevNodeSpouse.length === 1) {
+                        if (curNodeSpouse.length > 0) {
+                            peerNode.position(peerNode.position().x + nodeGapX, prevNode.position().y)
+                        }
+                    }
+                    if (prevNodeSpouse.length === 2) {
+                        if (curNodeSpouse.length > 0) {
+                            peerNode.position(peerNode.position().x + nodeGapX * 2, prevNode.position().y)
+                        } else {
+                            peerNode.position(peerNode.position().x + nodeGapX, prevNode.position().y)
+                        }
+                    }
+                    link(node, peerNode, [
+                        {
+                            x: node.position().x + nodeWidth / 2,
+                            y: node.position().y - gapY / 2
+                        },
+                        {
+                            x: peerNode.position().x + nodeWidth / 2,
+                            y: peerNode.position().y - gapY / 2
+                        }
+                    ])
+                    if (peerNode) {
+                        generateCoupleNode(peerNode)
+                    }
+                    return peerNode
+                }, peerNode)
+            }
+        }
+        return peerNode
+    }
+
     // 生成父母节点并链接
-    function generateParentNode(node) {
+    function generateParentNode(node, space = 0) {
         if (hasParent(node)) {
             const parent = getParent(node)
             const {x, y} = node.position()
@@ -165,13 +253,82 @@
                      * 爸爸妈妈都在就以爸爸为基准
                      */
                     const father = parent.find(item => item.gender === 'male');
-                    const fatherNode = generateNode(x, y - nodeGapY, father)
-                    link(node, fatherNode)
-                    generateCoupleNode(fatherNode)
+                    const fatherNode = generateNode(x + (nodeGapX * space), y - nodeGapY, father)
+                    link(node, fatherNode, [
+                        {
+                            x: node.position().x + nodeWidth / 2,
+                            y: node.position().y
+                        },
+                        {
+                            x: node.position().x + nodeWidth / 2,
+                            y: node.position().y - gapY / 2
+                        },
+                        {
+                            x: fatherNode.position().x + nodeWidth + gapX / 2,
+                            y: fatherNode.position().y + nodeHeight + gapY / 2
+                        },
+                        {
+                            x: fatherNode.position().x + nodeWidth + gapX / 2,
+                            y: fatherNode.position().y + nodeHeight / 2
+                        }
+                    ])
+                    generateParentNode(fatherNode)
+                    generateCoupleNode(fatherNode, false)
+                    generatePeerNode(fatherNode)
                     break
                 default:
                     break
             }
+        }
+    }
+
+    // 生成子女节点并链接
+    function generateChildNode({fatherNode, motherNode}, func = () => {
+    }) {
+        const direction = fatherNode.position().x - motherNode.position().x // direction < 0 为右边的节点
+        if (hasChildren({fatherNode, motherNode})) {
+            const children = getChildren({fatherNode, motherNode})
+            children.reduce((prev, cur, childIndex) => {
+                let childNode = null
+                const prevNode = prev ? prev : null
+                if (!prevNode) {
+                    childNode = generateNode(motherNode.position().x, motherNode.position().y + nodeGapY, cur)
+                } else {
+                    childNode = generateNode(prevNode.position().x + nodeGapX, motherNode.position().y + nodeGapY, cur)
+                    const prevSpouses = getSpouses(prevNode)
+                    const curSpouses = getSpouses(childNode)
+                    if (prevSpouses.length > 0) {
+                        if (curSpouses.length <= 1) {
+                            childNode.position(prevNode.position().x + nodeGapX * 2, prevNode.position().y)
+                        }
+                        if (curSpouses.length === 2) {
+                            childNode.position(prevNode.position().x + nodeGapX * 3, prevNode.position().y)
+                        }
+                    }
+                }
+                    func({childNode})
+                    generateCoupleNode(childNode, (opt) => {
+                        generateChildNode({
+                            fatherNode: childNode,
+                            motherNode: opt.spouseNode
+                        })
+                    })
+                    link(motherNode, childNode, [
+                        {
+                            x: motherNode.position().x + (direction < 0 ? -(gapX / 2) : (nodeWidth + gapX / 2)),
+                            y: motherNode.position().y + nodeHeight / 2
+                        },
+                        {
+                            x: motherNode.position().x + (direction < 0 ? -(gapX / 2) : (nodeWidth + gapX / 2)),
+                            y: motherNode.position().y + nodeHeight + gapY / 2
+                        },
+                        {
+                            x: childNode.position().x + nodeWidth / 2,
+                            y: childNode.position().y - gapY / 2
+                        }
+                    ])
+                return childNode
+            }, null)
         }
     }
 
@@ -197,19 +354,9 @@
      * 是否有配偶（只支持最多两个配偶，一左一右）
      * TODO 两个以上的配偶
      */
-    generateCoupleNode(mineNode, ({node, spouseNode}) => {
-        const direction = node.position().x - spouseNode.position().x // direction < 0 为右边的节点
-        // 和配偶是否有孩子
-        if (hasChildren({fatherNode: node, motherNode: spouseNode})) {
-            const children = getChildren({fatherNode: node, motherNode: spouseNode})
-            children.forEach((child, childIndex) => {
-                const childNode = generateNode(node.position().x + direction < 0 ? nodeGapX * (childIndex + 1) : -(nodeGapX * (childIndex + 1)), node.position().y + nodeGapY, child)
-                link(node, childNode)
-            })
-        }
-    })
+    generateCoupleNode(mineNode)
     generateParentNode(mineNode)
-
+    generatePeerNode(mineNode)
 
     // region 画布设置
     graph.zoomToFit({
